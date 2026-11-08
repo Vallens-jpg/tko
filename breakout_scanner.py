@@ -102,9 +102,23 @@ def _is_skippable(symbol):
 def stage1_tickers(exchange, quote, min_volume):
     """Tahap 1: saring dari ticker saja. Kembalikan list dict kandidat awal."""
     tickers = exchange.fetch_tickers()
+    # Filter status: hanya pair yang aktif diperdagangkan.
+    # Contoh nyata 8 Nov 2026: BNX/USDT statusnya BREAK, harganya beku
+    # dan bid/ask 0, tapi ticker/24hr tetap mencantumkannya, jadi tanpa
+    # filter ini scanner bisa membelinya. Kalau market list tidak bisa
+    # dibaca (misalnya CCXT gagal di VM ini), scan lanjut tanpa filter
+    # dan log peringatan, supaya tidak mati total karena satu cek.
+    active = None
+    try:
+        markets = exchange.fetch_markets()
+        active = {m["symbol"] for m in markets if m.get("active")}
+    except Exception as e:
+        print(f"[SCAN] Peringatan: tidak bisa cek status pair ({e}), lanjut tanpa filter status.")
     out = []
     for symbol, t in tickers.items():
         if not symbol.endswith("/" + quote):
+            continue
+        if active is not None and symbol not in active:
             continue
         if _is_skippable(symbol):
             continue
